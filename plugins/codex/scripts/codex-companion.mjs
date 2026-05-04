@@ -36,7 +36,7 @@ import {
 import {
   MODEL_ALIAS_ENTRIES,
   MODEL_PROFILES,
-  defaultModelForGateMode
+  defaultModelForCommand
 } from "./lib/model-config.mjs";
 import {
   buildSingleJobSnapshot,
@@ -733,7 +733,8 @@ async function handleReviewCommand(argv, config) {
     jobClass: "review",
     summary: metadata.summary
   });
-  const reviewModel = normalizeRequestedModel(options.model) ?? MODEL_PROFILES.fast.model;
+  const reviewModel =
+    normalizeRequestedModel(options.model) ?? defaultModelForCommand(config.modelCommandKey ?? "review");
   await runForegroundCommand(
     job,
     (progress) =>
@@ -753,6 +754,7 @@ async function handleReviewCommand(argv, config) {
 async function handleReview(argv) {
   return handleReviewCommand(argv, {
     reviewName: "Review",
+    modelCommandKey: "review",
     validateRequest: validateNativeReviewRequest
   });
 }
@@ -768,8 +770,7 @@ async function handleTask(argv) {
 
   const cwd = resolveCommandCwd(options);
   const workspaceRoot = resolveCommandWorkspace(options);
-  const gateMode = getConfig(workspaceRoot).stopReviewGateMode ?? "off";
-  const model = normalizeRequestedModel(options.model) ?? defaultModelForGateMode(gateMode);
+  const model = normalizeRequestedModel(options.model) ?? defaultModelForCommand("task");
   const effort = normalizeReasoningEffort(options.effort);
   const prompt = readTaskPrompt(cwd, options, positionals);
 
@@ -1023,7 +1024,8 @@ async function main() {
       break;
     case "adversarial-review":
       await handleReviewCommand(argv, {
-        reviewName: "Adversarial Review"
+        reviewName: "Adversarial Review",
+        modelCommandKey: "adversarialReview"
       });
       break;
     case "task":

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4-navyzal.3 (fork)
+
+- Reassign per-command model defaults: `/codex:review` now defaults to the spark profile (`gpt-5.3-codex-spark`) for deeper commit-time review reasoning, while `/codex:adversarial-review`, `/codex:task`, and `/codex:codex-rescue` all default to gpt-5.5 + service_tier=fast (review-fast profile). Stop-time gate mode no longer affects which model `task` uses — it only controls which command runs at round end.
+- Replace `defaultModelForGateMode(mode)` with `defaultModelForCommand(command)` keyed by `review|adversarialReview|task|rescue` in `scripts/lib/model-config.mjs`. Each model assignment lives in `COMMAND_MODEL_DEFAULTS` so future swaps are still a one-file change.
+- `handleReview` / `handleReviewCommand("Adversarial Review")` / `handleTask` updated to read the new per-command default. Setup docs note the new assignment.
+
 ## 1.0.4-navyzal.2 (fork)
 
 - `/codex:status` no longer says "Ending the session will trigger a fresh Codex adversarial review" when the gate is in standard mode. The status renderer now reads `report.reviewGateMode` and tailors the hint per mode: standard mentions the stop-gate ALLOW/BLOCK review, spark mentions `/codex:adversarial-review` with critical/high BLOCK semantics, and the gate label gains a `(standard)` / `(spark)` suffix.

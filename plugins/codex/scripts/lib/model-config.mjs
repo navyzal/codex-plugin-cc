@@ -31,6 +31,30 @@ export function resolveModelProfile(name) {
   return profile;
 }
 
-export function defaultModelForGateMode(mode) {
-  return mode === "spark" ? MODEL_PROFILES.spark.model : MODEL_PROFILES.fast.model;
+// Per-command default model selection. The stop-time review gate mode no
+// longer affects which model is used — it only controls which command runs
+// at round end (task with ALLOW/BLOCK vs adversarial-review with severity
+// gate). Model selection is a pure function of the command type.
+export const COMMAND_MODEL_DEFAULTS = {
+  // /codex:review — codex's native reviewer. Uses spark for deeper reasoning
+  // on commit-time review.
+  review: MODEL_PROFILES.spark.model,
+  // /codex:adversarial-review — adversarial review must stay fast so the
+  // round-end stop-gate finishes quickly.
+  adversarialReview: MODEL_PROFILES.fast.model,
+  // /codex:task — direct task delegation. Always fast unless the user
+  // explicitly passes --model.
+  task: MODEL_PROFILES.fast.model,
+  // /codex:codex-rescue — pinned to fast via rescue.md/agent injecting
+  // --model review-fast. The constant is here for reference / future moves
+  // of the pin into companion code.
+  rescue: MODEL_PROFILES.fast.model
+};
+
+export function defaultModelForCommand(command) {
+  const value = COMMAND_MODEL_DEFAULTS[command];
+  if (!value) {
+    throw new Error(`Unknown command default: ${command}. Update scripts/lib/model-config.mjs.`);
+  }
+  return value;
 }

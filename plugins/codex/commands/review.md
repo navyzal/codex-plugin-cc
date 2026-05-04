@@ -14,7 +14,7 @@ Core constraint:
 - This command is review-only.
 - Do not fix issues, apply patches, or suggest that you are about to make changes.
 - Your only job is to run the review and return Codex's output verbatim to the user.
-- Default model: gpt-5.5 with service_tier=fast (review-fast profile). Independent of the stop-time review gate mode.
+- Default model: gpt-5.3-codex-spark (spark profile) for deeper reasoning on commit-time review. Independent of the stop-time review gate mode.
 
 Execution mode rules:
 - If the raw arguments include `--wait`, do not ask. Run the review in the foreground.
