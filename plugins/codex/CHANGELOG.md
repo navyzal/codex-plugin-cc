@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4-navyzal.1 (fork)
+
+- `/codex:status` and `/codex:setup` now name the active gate mode explicitly (`enabled (standard ALLOW/BLOCK)` / `enabled (spark adversarial-review)` / `disabled`) via a shared `describeReviewGate` helper. `buildStatusSnapshot` exposes `reviewGateMode` so renderers can stop relying on the removed `stopReviewGate` boolean.
+- Test suite catches up to the spark gate change: setup argument-hint regex now expects `--enable-review-gate-spark`, and the rescue agent + skill assertions now validate the `--model review-fast` pin instead of the old "leave model unset" wording.
+
 ## 1.0.4-navyzal.0 (fork)
 
 - Added `--enable-review-gate-spark` setup flag. Standard `--enable-review-gate` keeps the legacy ALLOW/BLOCK behavior; spark mode runs `/codex:adversarial-review` at round end and BLOCKs on `severity ∈ {critical, high}`.
