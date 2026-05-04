@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4-navyzal.4 (fork)
+
+- Setup output text catches up to navyzal.3: drop the stale "spark task default" wording now that `/codex:task` always uses gpt-5.5 fast. The actionsTaken message after `--enable-review-gate-spark` and the nextSteps suggestion both now describe the spark gate as "adversarial-review at round end, BLOCK on severity critical/high".
+
 ## 1.0.4-navyzal.3 (fork)
 
 - Reassign per-command model defaults: `/codex:review` now defaults to the spark profile (`gpt-5.3-codex-spark`) for deeper commit-time review reasoning, while `/codex:adversarial-review`, `/codex:task`, and `/codex:codex-rescue` all default to gpt-5.5 + service_tier=fast (review-fast profile). Stop-time gate mode no longer affects which model `task` uses — it only controls which command runs at round end.

@@ -203,7 +203,7 @@ async function buildSetupReport(cwd, actionsTaken = []) {
     nextSteps.push("If browser login is blocked, retry with `!codex login --device-auth` or `!codex login --with-api-key`.");
   }
   if (reviewGateMode === "off") {
-    nextSteps.push("Optional: run `/codex:setup --enable-review-gate` (legacy ALLOW/BLOCK gate) or `/codex:setup --enable-review-gate-spark` (adversarial-review gate + spark task default) to require a fresh review before stop.");
+    nextSteps.push("Optional: run `/codex:setup --enable-review-gate` (legacy ALLOW/BLOCK gate) or `/codex:setup --enable-review-gate-spark` (adversarial-review gate, BLOCK on severity critical/high) to require a fresh review before stop.");
   }
 
   return {
@@ -251,7 +251,7 @@ async function handleSetup(argv) {
   } else if (enableSpark) {
     setConfig(workspaceRoot, "stopReviewGateMode", "spark");
     actionsTaken.push(
-      `Enabled the spark stop-time review gate (adversarial-review at round end + spark task default) for ${workspaceRoot}.`
+      `Enabled the spark stop-time review gate (adversarial-review at round end, BLOCK on severity critical/high) for ${workspaceRoot}.`
     );
   } else if (disable) {
     setConfig(workspaceRoot, "stopReviewGateMode", "off");
