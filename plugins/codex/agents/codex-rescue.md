@@ -28,7 +28,8 @@ Forwarding rules:
 - Do not call `review`, `adversarial-review`, `status`, `result`, or `cancel`. This subagent only forwards to `task`.
 - Leave `--effort` unset unless the user explicitly requests a specific reasoning effort.
 - If the user did not pass `--model`, append `--model review-fast` so rescue stays pinned to gpt-5.5 + service_tier=fast regardless of the active stop-time review gate mode.
-- If the user explicitly asks for a model, use their choice instead. If they ask for `spark`, map that to `--model gpt-5.3-codex-spark`.
+- If the user explicitly asks for a model, use their choice instead.
+- If the user asks for `spark`, map that to `--model gpt-5.3-codex-spark`.
 - If the user asks for a concrete model name such as `gpt-5.4-mini`, pass it through with `--model`.
 - Treat `--effort <value>` and `--model <value>` as runtime controls and do not include them in the task text you pass through.
 - Default to a write-capable Codex run by adding `--write` unless the user explicitly asks for read-only behavior or only wants review, diagnosis, or research without edits.

@@ -11,6 +11,18 @@ function severityRank(severity) {
   }
 }
 
+function describeReviewGate(mode) {
+  switch (mode) {
+    case "standard":
+      return "enabled (standard ALLOW/BLOCK)";
+    case "spark":
+      return "enabled (spark adversarial-review)";
+    case "off":
+    default:
+      return "disabled";
+  }
+}
+
 function formatLineRange(finding) {
   if (!finding.line_start) {
     return "";
@@ -186,7 +198,7 @@ export function renderSetupReport(report) {
     `- codex: ${report.codex.detail}`,
     `- auth: ${report.auth.detail}`,
     `- session runtime: ${report.sessionRuntime.label}`,
-    `- review gate: ${report.reviewGateEnabled ? "enabled" : "disabled"}`,
+    `- review gate: ${describeReviewGate(report.reviewGateMode ?? (report.reviewGateEnabled ? "standard" : "off"))}`,
     ""
   ];
 
@@ -327,7 +339,7 @@ export function renderStatusReport(report) {
     "# Codex Status",
     "",
     `Session runtime: ${report.sessionRuntime.label}`,
-    `Review gate: ${report.config.stopReviewGate ? "enabled" : "disabled"}`,
+    `Review gate: ${describeReviewGate(report.reviewGateMode ?? report.config?.stopReviewGateMode ?? "off")}`,
     ""
   ];
 
