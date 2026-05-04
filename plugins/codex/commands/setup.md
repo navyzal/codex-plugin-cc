@@ -1,8 +1,19 @@
 ---
 description: Check whether the local Codex CLI is ready and optionally toggle the stop-time review gate
-argument-hint: '[--enable-review-gate|--disable-review-gate]'
+argument-hint: '[--enable-review-gate|--enable-review-gate-spark|--disable-review-gate]'
 allowed-tools: Bash(node:*), Bash(npm:*), AskUserQuestion
 ---
+
+Stop-time review gate modes (mutually exclusive — one enable flag at a time, `--disable-review-gate` is the single off switch for either mode):
+- `--enable-review-gate` (standard): legacy ALLOW/BLOCK gate via companion `task`.
+- `--enable-review-gate-spark`: round end runs `/codex:adversarial-review` and BLOCKs on `severity ∈ {critical, high}`.
+
+Per-command model defaults (independent of the gate mode):
+- `/codex:review` → `gpt-5.3-codex-spark` (spark profile) for deeper reasoning.
+- `/codex:adversarial-review` → `gpt-5.5` + service_tier=fast (review-fast profile) so the round-end gate stays fast.
+- `/codex:task` → `gpt-5.5` + service_tier=fast.
+- `/codex:codex-rescue` → `gpt-5.5` + service_tier=fast (pinned via `--model review-fast`).
+- Pass `--model <alias|name>` on any command to override.
 
 Run:
 

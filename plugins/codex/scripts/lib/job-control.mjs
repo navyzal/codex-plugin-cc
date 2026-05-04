@@ -235,7 +235,8 @@ export function buildStatusSnapshot(cwd, options = {}) {
     running,
     latestFinished,
     recent,
-    needsReview: Boolean(config.stopReviewGate)
+    needsReview: typeof config.stopReviewGateMode === "string" && config.stopReviewGateMode !== "off",
+    reviewGateMode: typeof config.stopReviewGateMode === "string" ? config.stopReviewGateMode : "off"
   };
 }
 

@@ -17,6 +17,7 @@ Core constraint:
 - Do not fix issues, apply patches, or suggest that you are about to make changes.
 - Your only job is to run the review and return Codex's output verbatim to the user.
 - Keep the framing focused on whether the current approach is the right one, what assumptions it depends on, and where the design could fail under real-world conditions.
+- Default model: gpt-5.5 with service_tier=fast (review-fast profile). Independent of the stop-time review gate mode. When the spark stop-gate is enabled, this command is also the round-end gate.
 
 Execution mode rules:
 - If the raw arguments include `--wait`, do not ask. Run in the foreground.
