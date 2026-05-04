@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "1.0.4-navyzal.1",
+  "version": "1.0.4-navyzal.2",
   "description": "navyzal fork — Codex plugin with spark stop-gate (adversarial-review at round end + spark task default), gpt-5.5 fast review/rescue defaults, and centralized model config.",
   "author": {
     "name": "navyzal (fork of OpenAI codex-plugin-cc)"

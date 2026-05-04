@@ -379,8 +379,13 @@ export function renderStatusReport(report) {
   }
 
   if (report.needsReview) {
-    lines.push("The stop-time review gate is enabled.");
-    lines.push("Ending the session will trigger a fresh Codex adversarial review and block if it finds issues.");
+    const mode = report.reviewGateMode ?? "standard";
+    lines.push(`The stop-time review gate is enabled (${mode}).`);
+    if (mode === "spark") {
+      lines.push("Ending the session will run /codex:adversarial-review and block on critical or high severity findings.");
+    } else {
+      lines.push("Ending the session will run a Codex stop-gate review of the previous turn and block if it returns BLOCK.");
+    }
   }
 
   return `${lines.join("\n").trimEnd()}\n`;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4-navyzal.2 (fork)
+
+- `/codex:status` no longer says "Ending the session will trigger a fresh Codex adversarial review" when the gate is in standard mode. The status renderer now reads `report.reviewGateMode` and tailors the hint per mode: standard mentions the stop-gate ALLOW/BLOCK review, spark mentions `/codex:adversarial-review` with critical/high BLOCK semantics, and the gate label gains a `(standard)` / `(spark)` suffix.
+
 ## 1.0.4-navyzal.1 (fork)
 
 - `/codex:status` and `/codex:setup` now name the active gate mode explicitly (`enabled (standard ALLOW/BLOCK)` / `enabled (spark adversarial-review)` / `disabled`) via a shared `describeReviewGate` helper. `buildStatusSnapshot` exposes `reviewGateMode` so renderers can stop relying on the removed `stopReviewGate` boolean.
