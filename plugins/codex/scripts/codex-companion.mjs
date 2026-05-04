@@ -30,8 +30,14 @@ import {
   listJobs,
   setConfig,
   upsertJob,
-  writeJobFile
+  writeJobFile,
+  STOP_REVIEW_GATE_MODES
 } from "./lib/state.mjs";
+import {
+  MODEL_ALIAS_ENTRIES,
+  MODEL_PROFILES,
+  defaultModelForGateMode
+} from "./lib/model-config.mjs";
 import {
   buildSingleJobSnapshot,
   buildStatusSnapshot,
@@ -67,14 +73,14 @@ const REVIEW_SCHEMA = path.join(ROOT_DIR, "schemas", "review-output.schema.json"
 const DEFAULT_STATUS_WAIT_TIMEOUT_MS = 240000;
 const DEFAULT_STATUS_POLL_INTERVAL_MS = 2000;
 const VALID_REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
-const MODEL_ALIASES = new Map([["spark", "gpt-5.3-codex-spark"]]);
+const MODEL_ALIASES = new Map(MODEL_ALIAS_ENTRIES);
 const STOP_REVIEW_TASK_MARKER = "Run a stop-gate review of the previous Claude turn.";
 
 function printUsage() {
   console.log(
     [
       "Usage:",
-      "  node scripts/codex-companion.mjs setup [--enable-review-gate|--disable-review-gate] [--json]",
+      "  node scripts/codex-companion.mjs setup [--enable-review-gate|--enable-review-gate-spark|--disable-review-gate] [--json]",
       "  node scripts/codex-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>]",
       "  node scripts/codex-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [focus text]",
       "  node scripts/codex-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model|spark>] [--effort <none|minimal|low|medium|high|xhigh>] [prompt]",
@@ -184,6 +190,10 @@ async function buildSetupReport(cwd, actionsTaken = []) {
   const authStatus = await getCodexAuthStatus(cwd);
   const config = getConfig(workspaceRoot);
 
+  const reviewGateMode = STOP_REVIEW_GATE_MODES.includes(config.stopReviewGateMode)
+    ? config.stopReviewGateMode
+    : "off";
+
   const nextSteps = [];
   if (!codexStatus.available) {
     nextSteps.push("Install Codex with `npm install -g @openai/codex`.");
@@ -192,8 +202,8 @@ async function buildSetupReport(cwd, actionsTaken = []) {
     nextSteps.push("Run `!codex login`.");
     nextSteps.push("If browser login is blocked, retry with `!codex login --device-auth` or `!codex login --with-api-key`.");
   }
-  if (!config.stopReviewGate) {
-    nextSteps.push("Optional: run `/codex:setup --enable-review-gate` to require a fresh review before stop.");
+  if (reviewGateMode === "off") {
+    nextSteps.push("Optional: run `/codex:setup --enable-review-gate` (legacy ALLOW/BLOCK gate) or `/codex:setup --enable-review-gate-spark` (adversarial-review gate + spark task default) to require a fresh review before stop.");
   }
 
   return {
@@ -203,7 +213,8 @@ async function buildSetupReport(cwd, actionsTaken = []) {
     codex: codexStatus,
     auth: authStatus,
     sessionRuntime: getSessionRuntimeStatus(process.env, workspaceRoot),
-    reviewGateEnabled: Boolean(config.stopReviewGate),
+    reviewGateEnabled: reviewGateMode !== "off",
+    reviewGateMode,
     actionsTaken,
     nextSteps
   };
@@ -212,22 +223,38 @@ async function buildSetupReport(cwd, actionsTaken = []) {
 async function handleSetup(argv) {
   const { options } = parseCommandInput(argv, {
     valueOptions: ["cwd"],
-    booleanOptions: ["json", "enable-review-gate", "disable-review-gate"]
+    booleanOptions: [
+      "json",
+      "enable-review-gate",
+      "enable-review-gate-spark",
+      "disable-review-gate"
+    ]
   });
 
-  if (options["enable-review-gate"] && options["disable-review-gate"]) {
-    throw new Error("Choose either --enable-review-gate or --disable-review-gate.");
+  const enableStandard = Boolean(options["enable-review-gate"]);
+  const enableSpark = Boolean(options["enable-review-gate-spark"]);
+  const disable = Boolean(options["disable-review-gate"]);
+  const setFlagCount = [enableStandard, enableSpark, disable].filter(Boolean).length;
+  if (setFlagCount > 1) {
+    throw new Error(
+      "Choose at most one of: --enable-review-gate, --enable-review-gate-spark, --disable-review-gate."
+    );
   }
 
   const cwd = resolveCommandCwd(options);
   const workspaceRoot = resolveCommandWorkspace(options);
   const actionsTaken = [];
 
-  if (options["enable-review-gate"]) {
-    setConfig(workspaceRoot, "stopReviewGate", true);
-    actionsTaken.push(`Enabled the stop-time review gate for ${workspaceRoot}.`);
-  } else if (options["disable-review-gate"]) {
-    setConfig(workspaceRoot, "stopReviewGate", false);
+  if (enableStandard) {
+    setConfig(workspaceRoot, "stopReviewGateMode", "standard");
+    actionsTaken.push(`Enabled the standard stop-time review gate for ${workspaceRoot}.`);
+  } else if (enableSpark) {
+    setConfig(workspaceRoot, "stopReviewGateMode", "spark");
+    actionsTaken.push(
+      `Enabled the spark stop-time review gate (adversarial-review at round end + spark task default) for ${workspaceRoot}.`
+    );
+  } else if (disable) {
+    setConfig(workspaceRoot, "stopReviewGateMode", "off");
     actionsTaken.push(`Disabled the stop-time review gate for ${workspaceRoot}.`);
   }
 
@@ -706,6 +733,7 @@ async function handleReviewCommand(argv, config) {
     jobClass: "review",
     summary: metadata.summary
   });
+  const reviewModel = normalizeRequestedModel(options.model) ?? MODEL_PROFILES.fast.model;
   await runForegroundCommand(
     job,
     (progress) =>
@@ -713,7 +741,7 @@ async function handleReviewCommand(argv, config) {
         cwd,
         base: options.base,
         scope: options.scope,
-        model: options.model,
+        model: reviewModel,
         focusText,
         reviewName: config.reviewName,
         onProgress: progress
@@ -740,7 +768,8 @@ async function handleTask(argv) {
 
   const cwd = resolveCommandCwd(options);
   const workspaceRoot = resolveCommandWorkspace(options);
-  const model = normalizeRequestedModel(options.model);
+  const gateMode = getConfig(workspaceRoot).stopReviewGateMode ?? "off";
+  const model = normalizeRequestedModel(options.model) ?? defaultModelForGateMode(gateMode);
   const effort = normalizeReasoningEffort(options.effort);
   const prompt = readTaskPrompt(cwd, options, positionals);
 

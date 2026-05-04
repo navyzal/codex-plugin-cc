@@ -17,6 +17,7 @@ const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..");
 const STOP_REVIEW_TASK_MARKER = "Run a stop-gate review of the previous Claude turn.";
+const BLOCKING_SEVERITIES = new Set(["critical", "high"]);
 
 function readHookInput() {
   const raw = fs.readFileSync(0, "utf8").trim();
@@ -66,7 +67,7 @@ function buildSetupNote(cwd) {
   return `Codex is not set up for the review gate.${detail} Run /codex:setup.`;
 }
 
-function parseStopReviewOutput(rawOutput) {
+function parseStandardStopReviewOutput(rawOutput) {
   const text = String(rawOutput ?? "").trim();
   if (!text) {
     return {
@@ -95,41 +96,95 @@ function parseStopReviewOutput(rawOutput) {
   };
 }
 
-function runStopReview(cwd, input = {}) {
+function summarizeFinding(finding) {
+  const title = String(finding?.title ?? "").trim();
+  const file = String(finding?.file ?? "").trim();
+  const lineStart = Number.isFinite(finding?.line_start) ? finding.line_start : null;
+  const location = file ? (lineStart ? `${file}:${lineStart}` : file) : "";
+  return location ? `${title} (${location})` : title;
+}
+
+function parseAdversarialReviewOutput(payload) {
+  const result = payload?.result;
+  if (!result || typeof result !== "object") {
+    const parseError = payload?.parseError ? `: ${payload.parseError}` : "";
+    return {
+      ok: false,
+      reason: `Adversarial stop-gate review did not return a structured result${parseError}. Run /codex:adversarial-review --wait manually or bypass the gate.`
+    };
+  }
+
+  const findings = Array.isArray(result.findings) ? result.findings : [];
+  const blocking = findings.filter((finding) =>
+    BLOCKING_SEVERITIES.has(String(finding?.severity ?? "").toLowerCase())
+  );
+
+  if (blocking.length === 0) {
+    const advisory = findings
+      .filter((finding) => !BLOCKING_SEVERITIES.has(String(finding?.severity ?? "").toLowerCase()))
+      .map((finding) => `- [${finding.severity}] ${summarizeFinding(finding)}`)
+      .join("\n");
+    if (advisory) {
+      logNote(`Adversarial stop-gate review (advisory):\n${advisory}`);
+    }
+    return { ok: true, reason: null };
+  }
+
+  const summary = blocking
+    .slice(0, 5)
+    .map((finding) => `- [${finding.severity}] ${summarizeFinding(finding)}`)
+    .join("\n");
+  const overflow = blocking.length > 5 ? `\n(+${blocking.length - 5} more)` : "";
+  return {
+    ok: false,
+    reason: `Adversarial stop-gate review surfaced ${blocking.length} blocking finding(s) before ending the session:\n${summary}${overflow}`
+  };
+}
+
+function spawnCompanion(args, cwd, input) {
   const scriptPath = path.join(SCRIPT_DIR, "codex-companion.mjs");
-  const prompt = buildStopReviewPrompt(input);
   const childEnv = {
     ...process.env,
     ...(input.session_id ? { [SESSION_ID_ENV]: input.session_id } : {})
   };
-  const result = spawnSync(process.execPath, [scriptPath, "task", "--json", prompt], {
+  return spawnSync(process.execPath, [scriptPath, ...args], {
     cwd,
     env: childEnv,
     encoding: "utf8",
     timeout: STOP_REVIEW_TIMEOUT_MS
   });
+}
 
+function timeoutOrFailure(result, label) {
   if (result.error?.code === "ETIMEDOUT") {
     return {
       ok: false,
-      reason:
-        "The stop-time Codex review task timed out after 15 minutes. Run /codex:review --wait manually or bypass the gate."
+      reason: `The ${label} timed out after 15 minutes. Run /codex:review --wait manually or bypass the gate.`
     };
   }
-
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim();
     return {
       ok: false,
       reason: detail
-        ? `The stop-time Codex review task failed: ${detail}`
-        : "The stop-time Codex review task failed. Run /codex:review --wait manually or bypass the gate."
+        ? `The ${label} failed: ${detail}`
+        : `The ${label} failed. Run /codex:review --wait manually or bypass the gate.`
     };
+  }
+  return null;
+}
+
+function runStandardStopReview(cwd, input = {}) {
+  const prompt = buildStopReviewPrompt(input);
+  const result = spawnCompanion(["task", "--json", prompt], cwd, input);
+  const failure = timeoutOrFailure(result, "stop-time Codex review task");
+  if (failure) {
+    return failure;
   }
 
   try {
     const payload = JSON.parse(result.stdout);
-    return parseStopReviewOutput(payload?.rawOutput);
+    return parseStandardStopReviewOutput(payload?.rawOutput);
   } catch {
     return {
       ok: false,
@@ -139,11 +194,31 @@ function runStopReview(cwd, input = {}) {
   }
 }
 
+function runAdversarialStopReview(cwd, input = {}) {
+  const result = spawnCompanion(["adversarial-review", "--json"], cwd, input);
+  const failure = timeoutOrFailure(result, "adversarial stop-gate review");
+  if (failure) {
+    return failure;
+  }
+
+  try {
+    const payload = JSON.parse(result.stdout);
+    return parseAdversarialReviewOutput(payload);
+  } catch {
+    return {
+      ok: false,
+      reason:
+        "The adversarial stop-gate review returned invalid JSON. Run /codex:adversarial-review --wait manually or bypass the gate."
+    };
+  }
+}
+
 function main() {
   const input = readHookInput();
   const cwd = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const workspaceRoot = resolveWorkspaceRoot(cwd);
   const config = getConfig(workspaceRoot);
+  const mode = typeof config.stopReviewGateMode === "string" ? config.stopReviewGateMode : "off";
 
   const jobs = sortJobsNewestFirst(filterJobsForCurrentSession(listJobs(workspaceRoot), input));
   const runningJob = jobs.find((job) => job.status === "queued" || job.status === "running");
@@ -151,7 +226,7 @@ function main() {
     ? `Codex task ${runningJob.id} is still running. Check /codex:status and use /codex:cancel ${runningJob.id} if you want to stop it before ending the session.`
     : null;
 
-  if (!config.stopReviewGate) {
+  if (mode === "off") {
     logNote(runningTaskNote);
     return;
   }
@@ -163,7 +238,7 @@ function main() {
     return;
   }
 
-  const review = runStopReview(cwd, input);
+  const review = mode === "spark" ? runAdversarialStopReview(cwd, input) : runStandardStopReview(cwd, input);
   if (!review.ok) {
     emitDecision({
       decision: "block",

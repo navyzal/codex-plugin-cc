@@ -16,12 +16,35 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+export const STOP_REVIEW_GATE_MODES = Object.freeze(["off", "standard", "spark"]);
+
+function defaultConfig() {
+  return {
+    stopReviewGateMode: "off"
+  };
+}
+
+function migrateLegacyConfig(config) {
+  if (!config || typeof config !== "object") {
+    return defaultConfig();
+  }
+  const next = { ...config };
+  const hasExplicitMode =
+    typeof next.stopReviewGateMode === "string" && STOP_REVIEW_GATE_MODES.includes(next.stopReviewGateMode);
+  const hasLegacyFlag = Object.prototype.hasOwnProperty.call(next, "stopReviewGate");
+  if (!hasExplicitMode && hasLegacyFlag) {
+    next.stopReviewGateMode = next.stopReviewGate === true ? "standard" : "off";
+  } else if (!hasExplicitMode) {
+    next.stopReviewGateMode = "off";
+  }
+  delete next.stopReviewGate;
+  return next;
+}
+
 function defaultState() {
   return {
     version: STATE_VERSION,
-    config: {
-      stopReviewGate: false
-    },
+    config: defaultConfig(),
     jobs: []
   };
 }
@@ -66,10 +89,7 @@ export function loadState(cwd) {
     return {
       ...defaultState(),
       ...parsed,
-      config: {
-        ...defaultState().config,
-        ...(parsed.config ?? {})
-      },
+      config: migrateLegacyConfig(parsed.config ?? {}),
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
     };
   } catch {
@@ -95,10 +115,7 @@ export function saveState(cwd, state) {
   const nextJobs = pruneJobs(state.jobs ?? []);
   const nextState = {
     version: STATE_VERSION,
-    config: {
-      ...defaultState().config,
-      ...(state.config ?? {})
-    },
+    config: migrateLegacyConfig(state.config ?? {}),
     jobs: nextJobs
   };
 
