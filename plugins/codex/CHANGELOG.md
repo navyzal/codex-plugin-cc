@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4-navyzal.5 (fork)
+
+- `runAdversarialStopReview` now suggests rerunning `/codex:adversarial-review --wait` (not `/codex:review --wait`) on timeout or non-zero exit, so the recovery hint matches the failed gate. `timeoutOrFailure` accepts a retryCommand argument to keep the standard path's hint unchanged.
+
 ## 1.0.4-navyzal.4 (fork)
 
 - Setup output text catches up to navyzal.3: drop the stale "spark task default" wording now that `/codex:task` always uses gpt-5.5 fast. The actionsTaken message after `--enable-review-gate-spark` and the nextSteps suggestion both now describe the spark gate as "adversarial-review at round end, BLOCK on severity critical/high".

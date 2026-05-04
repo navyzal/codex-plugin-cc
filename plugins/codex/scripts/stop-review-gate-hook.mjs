@@ -155,11 +155,11 @@ function spawnCompanion(args, cwd, input) {
   });
 }
 
-function timeoutOrFailure(result, label) {
+function timeoutOrFailure(result, label, retryCommand = "/codex:review --wait") {
   if (result.error?.code === "ETIMEDOUT") {
     return {
       ok: false,
-      reason: `The ${label} timed out after 15 minutes. Run /codex:review --wait manually or bypass the gate.`
+      reason: `The ${label} timed out after 15 minutes. Run ${retryCommand} manually or bypass the gate.`
     };
   }
   if (result.status !== 0) {
@@ -168,7 +168,7 @@ function timeoutOrFailure(result, label) {
       ok: false,
       reason: detail
         ? `The ${label} failed: ${detail}`
-        : `The ${label} failed. Run /codex:review --wait manually or bypass the gate.`
+        : `The ${label} failed. Run ${retryCommand} manually or bypass the gate.`
     };
   }
   return null;
@@ -196,7 +196,7 @@ function runStandardStopReview(cwd, input = {}) {
 
 function runAdversarialStopReview(cwd, input = {}) {
   const result = spawnCompanion(["adversarial-review", "--json"], cwd, input);
-  const failure = timeoutOrFailure(result, "adversarial stop-gate review");
+  const failure = timeoutOrFailure(result, "adversarial stop-gate review", "/codex:adversarial-review --wait");
   if (failure) {
     return failure;
   }
@@ -212,6 +212,8 @@ function runAdversarialStopReview(cwd, input = {}) {
     };
   }
 }
+
+
 
 function main() {
   const input = readHookInput();
